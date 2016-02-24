@@ -37,8 +37,37 @@ typedef struct sqp {
 } Sqp;
 typedef struct sqp* SQP;
 
+typedef struct stat {
+  long nReadPairsRaw;
+  long nBasesRaw;
+  long nBasesRawQ20;
+  long nBasesRawQ30;
+  long nBasesRawA;
+  long nBasesRawC;
+  long nBasesRawG;
+  long nBasesRawT;
+  long nBasesRawN;
+  long nReadPairsDiscarded;
+  long nReadPairsAdapter;
+  long nReadPairsClean;
+  long nBasesClean;
+  long nBasesCleanQ20;
+  long nBasesCleanQ30;
+  long nReadPairsOverlapped;
+  long nBasesOverlapped;
+} Stat;
+typedef struct stat* STAT;
+
 SQP SQP_init();
 void SQP_destroy(SQP sqp);
+STAT STAT_init();
+void STAT_destroy(STAT stat);
+void tally_stats_raw(STAT stat, SQP sqp);
+void tally_stats_discarded(STAT stat, SQP sqp);
+void tally_stats_adapter(STAT stat, SQP sqp);
+void tally_stats_merged(STAT stat, SQP sqp);
+void tally_stats_clean(STAT stat, SQP sqp);
+void write_stats(STAT stat);
 void adapter_merge(SQP sqp, bool print_overhang);
 void fill_merged_sequence(SQP sqp, AlnAln *aln, bool include_overhang);
 void pretty_print_alignment(gzFile out, SQP sqp, char adj_q_cut, bool sort);

@@ -13,6 +13,85 @@ SQP SQP_init(){
   return (SQP) malloc(sizeof(Sqp));
 }
 
+STAT STAT_init(){
+  //allocate an STAT
+  return (STAT) malloc(sizeof(Stat));
+}
+
+void tally_stats_raw(STAT stat, SQP sqp){
+  stat->nReadPairsRaw++;
+  stat->nBasesRaw+=(sqp->flen+sqp->rlen);
+  int i;
+  for(i=0;i<sqp->flen;i++){
+    switch(toupper(sqp->fseq[i])){
+    case 'A': stat->nBasesRawA++;break;
+    case 'C': stat->nBasesRawC++;break;
+    case 'G': stat->nBasesRawG++;break;
+    case 'T': stat->nBasesRawT++;break;
+    case 'N': stat->nBasesRawN++;break;
+    }
+    if(sqp->fqual[i]>='5') stat->nBasesRawQ20++;
+    if(sqp->fqual[i]>='?') stat->nBasesRawQ30++;
+  }
+  for(i=0;i<sqp->rlen;i++){
+    switch(toupper(sqp->rseq[i])){
+    case 'A': stat->nBasesRawA++;break;
+    case 'C': stat->nBasesRawC++;break;
+    case 'G': stat->nBasesRawG++;break;
+    case 'T': stat->nBasesRawT++;break;
+    case 'N': stat->nBasesRawN++;break;
+    }
+    if(sqp->rqual[i]>='5') stat->nBasesRawQ20++;
+    if(sqp->rqual[i]>='?') stat->nBasesRawQ30++;
+  }
+}
+
+void tally_stats_clean(STAT stat, SQP sqp){
+  stat->nReadPairsClean++;
+  stat->nBasesClean+=(sqp->flen+sqp->rlen);
+  int i;
+  for(i=0;i<sqp->flen;i++){
+    if(sqp->fqual[i]>='5') stat->nBasesCleanQ20++;
+    if(sqp->fqual[i]>='?') stat->nBasesCleanQ30++;
+  }
+  for(i=0;i<sqp->rlen;i++){
+    if(sqp->rqual[i]>='5') stat->nBasesCleanQ20++;
+    if(sqp->rqual[i]>='?') stat->nBasesCleanQ30++;
+  }
+}
+
+void tally_stats_merged(STAT stat, SQP sqp){
+  stat->nReadPairsOverlapped++;
+  stat->nBasesOverlapped+=sqp->merged_len;
+}
+
+void tally_stats_discarded(STAT stat, SQP sqp){
+  stat->nReadPairsDiscarded++;
+}
+
+void tally_stats_adapter(STAT stat, SQP sqp){
+  stat->nReadPairsAdapter++;
+}
+
+void write_stats(STAT stat){
+  fprintf(stdout,"nReadPairsRaw:\t%ld\n",stat->nReadPairsRaw);
+  fprintf(stdout,"nBasesRaw:\t%ld\n",stat->nBasesRaw);
+  fprintf(stdout,"nBasesRawQ20:\t%ld\n",stat->nBasesRawQ20);
+  fprintf(stdout,"nBasesRawQ30:\t%ld\n",stat->nBasesRawQ30);
+  fprintf(stdout,"nBasesRawA:\t%ld\n",stat->nBasesRawA);
+  fprintf(stdout,"nBasesRawC:\t%ld\n",stat->nBasesRawC);
+  fprintf(stdout,"nBasesRawG:\t%ld\n",stat->nBasesRawG);
+  fprintf(stdout,"nBasesRawT:\t%ld\n",stat->nBasesRawT);
+  fprintf(stdout,"nBasesRawN:\t%ld\n",stat->nBasesRawN);
+  fprintf(stdout,"nReadPairsDiscarded:\t%ld\n",stat->nReadPairsDiscarded);
+  fprintf(stdout,"nReadPairsAdapter:\t%ld\n",stat->nReadPairsAdapter);
+  fprintf(stdout,"nReadPairsClean:\t%ld\n",stat->nReadPairsClean);
+  fprintf(stdout,"nBasesClean:\t%ld\n",stat->nBasesClean);
+  fprintf(stdout,"nBasesCleanQ20:\t%ld\n",stat->nBasesCleanQ20);
+  fprintf(stdout,"nBasesCleanQ30:\t%ld\n",stat->nBasesCleanQ30);
+  fprintf(stdout,"nReadPairsOverlapped:\t%ld\n",stat->nReadPairsOverlapped);
+  fprintf(stdout,"nBasesOverlapped:\t%ld\n",stat->nBasesOverlapped);
+}
 
 /**
  * Calculates the resulting phred 33 score given a mismatch
@@ -337,6 +416,11 @@ void fill_merged_sequence(SQP sqp, AlnAln *aln, bool trim_overhang){
 void SQP_destroy(SQP sqp){
   //free up an SQP
   free(sqp);
+}
+
+void STAT_destroy(STAT stat){
+  //free up an STAT
+  free(stat);
 }
 
 

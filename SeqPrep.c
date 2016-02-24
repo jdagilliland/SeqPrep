@@ -45,6 +45,7 @@ void help ( char *prog_name ) {
   fprintf(stderr, "General Arguments (Optional):\n" );
   fprintf(stderr, "\t-3 <first read discarded fastq filename>\n" );
   fprintf(stderr, "\t-4 <second read discarded fastq filename>\n" );
+  fprintf(stderr, "\t-S Write detailed statistics to stdout (assumes that the -s option is not used)\n" );
   fprintf(stderr, "\t-h Display this help message and exit (also works with no args) \n" );
   fprintf(stderr, "\t-6 Input sequence is in phred+64 rather than phred+33 format, the output will still be phred+33 \n" );
   fprintf(stderr, "\t-q <Quality score cutoff for mismatches to be counted in overlap; default = %d>\n", DEF_QCUT );
@@ -135,6 +136,7 @@ int main( int argc, char* argv[] ) {
   bool do_read_merging = false;
   bool print_overhang = false;
   bool write_discard=false;
+  bool gather_stats=false;
   char forward_primer[MAX_SEQ_LEN+1];
   strcpy(forward_primer, DEF_FORWARD_PRIMER); //set default
   char forward_primer_dummy_qual[MAX_SEQ_LEN+1];
@@ -164,6 +166,7 @@ int main( int argc, char* argv[] ) {
   bool pretty_print = false;
   char pretty_print_fn[MAX_FN_LEN+1];
   SQP sqp = SQP_init();
+  STAT stat = STAT_init();
   char untrim_fseq[MAX_SEQ_LEN+1];
   char untrim_fqual[MAX_SEQ_LEN+1];
   char untrim_rseq[MAX_SEQ_LEN+1];
@@ -173,7 +176,7 @@ int main( int argc, char* argv[] ) {
     help(argv[0]);
   }
   int req_args = 0;
-  while( (ich=getopt( argc, argv, "f:r:1:2:3:4:q:A:s:y:B:O:E:x:M:N:L:o:m:b:w:W:p:P:X:Q:t:e:Z:n:6gh" )) != -1 ) {
+  while( (ich=getopt( argc, argv, "f:r:1:2:3:4:q:A:s:y:B:O:E:x:M:N:L:o:m:b:w:W:p:P:X:Q:t:e:Z:n:6gh:S" )) != -1 ) {
     switch( ich ) {
 
     //REQUIRED ARGUMENTS
@@ -202,6 +205,9 @@ int main( int argc, char* argv[] ) {
     case '4' :
       write_discard=true;
       strcpy(reverse_discard_fn, optarg);
+      break;
+    case 'S' :
+      gather_stats=true;
       break;
     case 'h' :
       help(argv[0]);
@@ -348,7 +354,7 @@ int main( int argc, char* argv[] ) {
    */
   while(next_fastqs( ffq, rfq, sqp, p64 )){ //returns false when done
     update_spinner(num_pairs++);
-
+    if(gather_stats) tally_stats_raw(stat,sqp);
 
     AlnAln *faaln, *raaln, *fraln;
 
@@ -377,6 +383,7 @@ int main( int argc, char* argv[] ) {
         faaln->score >= adapter_thresh ||
         raaln->score >= adapter_thresh){
       num_adapter++; //adapter present
+      if(gather_stats) tally_stats_adapter(stat,sqp);
       //print it if user wants
       if(pretty_print && num_pretty_print < max_pretty_print){
         //void pretty_print_alignment_stdaln(gzFile out, SQP sqp, AlnAln *aln, bool first_adapter, bool second_adapter)
@@ -413,6 +420,7 @@ int main( int argc, char* argv[] ) {
 
       if(sqp->flen < min_read_len || sqp->rlen < min_read_len){
         num_discarded++;
+	if(gather_stats) tally_stats_discarded(stat,sqp);
 	if(write_discard){
 	  write_fastq(dffqw, sqp->fid, untrim_fseq, untrim_fqual);
 	  write_fastq(drfqw, sqp->rid, untrim_rseq, untrim_rqual);
@@ -446,7 +454,7 @@ int main( int argc, char* argv[] ) {
       //fprintf(stderr, "rt:%d\tfl:%d\trl:%d\trft:%f\tgx:%d\tgo:%d\tge%d\n", read_thresh,((int)sqp->flen),((int)sqp->rlen),read_frac_thresh,aln_param_rd2rd.gap_ext,aln_param_rd2rd.gap_open,aln_param_rd2rd.gap_end);
       fraln->subo = read_thresh;
 
-      if(do_read_merging && fraln->score > read_thresh){
+      if( (do_read_merging && fraln->score > read_thresh) || gather_stats){
         //if we want read merging,
         //and the alignment score is better than the threshold just calculated...
 
@@ -458,10 +466,18 @@ int main( int argc, char* argv[] ) {
         }
         if(strlen(sqp->merged_seq) >= min_read_len && strlen(sqp->merged_qual) >= min_read_len){
           num_merged++;
-          write_fastq(mfqw,sqp->fid,sqp->merged_seq,sqp->merged_qual);
+	  if(gather_stats){
+	    tally_stats_merged(stat,sqp);
+	    make_blunt_ends(sqp,fraln);
+	    tally_stats_clean(stat,sqp);
+	    write_fastq(ffqw, sqp->fid, sqp->fseq, sqp->fqual);
+	    write_fastq(rfqw, sqp->rid, sqp->rseq, sqp->rqual);
+	  }
+	  else write_fastq(mfqw,sqp->fid,sqp->merged_seq,sqp->merged_qual);
         }
         else{
           num_discarded++;
+	  if(gather_stats) tally_stats_discarded(stat,sqp);
 	  if(write_discard){
 	    write_fastq(dffqw, sqp->fid, untrim_fseq, untrim_fqual);
 	    write_fastq(drfqw, sqp->rid, untrim_rseq, untrim_rqual);
@@ -496,10 +512,12 @@ int main( int argc, char* argv[] ) {
             strlen(sqp->rseq) >= min_read_len &&
             strlen(sqp->rqual) >= min_read_len){
 
+	  tally_stats_clean(stat,sqp);
           write_fastq(ffqw, sqp->fid, sqp->fseq, sqp->fqual);
           write_fastq(rfqw, sqp->rid, sqp->rseq, sqp->rqual);
         }else{
           num_discarded++;
+	  if(gather_stats) tally_stats_discarded(stat,sqp);
 	  if(write_discard){
 	    write_fastq(dffqw, sqp->fid, untrim_fseq, untrim_fqual);
 	    write_fastq(drfqw, sqp->rid, untrim_rseq, untrim_rqual);
@@ -509,6 +527,7 @@ int main( int argc, char* argv[] ) {
 
       }else{ //there was a bad looking read-read alignment, so lets not risk it and junk it
         num_discarded++;
+	if(gather_stats) tally_stats_discarded(stat,sqp);
 	if(write_discard){
 	  //write_fastq(dffqw, sqp->fid, sqp->fseq, sqp->fqual);
 	  //write_fastq(drfqw, sqp->rid, sqp->rseq, sqp->rqual);
@@ -519,19 +538,26 @@ int main( int argc, char* argv[] ) {
     }else{
       //no adapters present
       //check for strong read overlap to assist trimming ends of adapters from end of read
-      if(do_read_merging){
+      if(do_read_merging || gather_stats){
         if(read_merge(sqp, min_ol_reads, min_match_reads, max_mismatch_reads, qcut)){
           //print merged output
           if(strlen(sqp->merged_seq) >= min_read_len &&
               strlen(sqp->merged_qual) >= min_read_len){
             num_merged++;
-            write_fastq(mfqw,sqp->fid,sqp->merged_seq,sqp->merged_qual);
+	    if(gather_stats){
+	      tally_stats_merged(stat,sqp);
+	      tally_stats_clean(stat,sqp);
+	      write_fastq(ffqw, sqp->fid, sqp->fseq, sqp->fqual);
+	      write_fastq(rfqw, sqp->rid, sqp->rseq, sqp->rqual);
+	    }
+            else write_fastq(mfqw,sqp->fid,sqp->merged_seq,sqp->merged_qual);
             if(pretty_print && num_pretty_print < max_pretty_print){
               num_pretty_print++;
               pretty_print_alignment(ppaw,sqp,qcut,false); //false b/c merged input in fixed order
             }
           }else{
             num_discarded++;
+	    if(gather_stats) tally_stats_discarded(stat,sqp);
 	    if(write_discard){
 	      write_fastq(dffqw, sqp->fid, untrim_fseq, untrim_fqual);
 	      write_fastq(drfqw, sqp->rid, untrim_rseq, untrim_rqual);
@@ -543,10 +569,12 @@ int main( int argc, char* argv[] ) {
               strlen(sqp->fqual) >= min_read_len &&
               strlen(sqp->rseq) >= min_read_len &&
               strlen(sqp->rqual) >= min_read_len){
+	    tally_stats_clean(stat,sqp);
             write_fastq(ffqw, sqp->fid, sqp->fseq, sqp->fqual);
             write_fastq(rfqw, sqp->rid, sqp->rseq, sqp->rqual);
           }else{
             num_discarded++;
+	    if(gather_stats) tally_stats_discarded(stat,sqp);
 	    if(write_discard){
 	      write_fastq(dffqw, sqp->fid, untrim_fseq, untrim_fqual);
 	      write_fastq(drfqw, sqp->rid, untrim_rseq, untrim_rqual);
@@ -561,10 +589,12 @@ int main( int argc, char* argv[] ) {
             strlen(sqp->fqual) >= min_read_len &&
             strlen(sqp->rseq) >= min_read_len &&
             strlen(sqp->rqual) >= min_read_len){
+	  tally_stats_clean(stat,sqp);
           write_fastq(ffqw, sqp->fid, sqp->fseq, sqp->fqual);
           write_fastq(rfqw, sqp->rid, sqp->rseq, sqp->rqual);
         }else{
           num_discarded++;
+	  if(gather_stats) tally_stats_discarded(stat,sqp);
 	  if(write_discard){
 	    write_fastq(dffqw, sqp->fid, untrim_fseq, untrim_fqual);
 	    write_fastq(drfqw, sqp->rid, untrim_rseq, untrim_rqual);
@@ -597,7 +627,7 @@ int main( int argc, char* argv[] ) {
   fprintf(stderr,"Pairs With Adapters:\t%lld\n",num_adapter);
   fprintf(stderr,"Pairs Discarded:\t%lld\n",num_discarded);
   fprintf(stderr,"CPU Time Used (Minutes):\t%lf\n",cpu_time_used/60.0);
-
+  if(gather_stats) write_stats(stat);
 
 
   SQP_destroy(sqp);
