@@ -85,8 +85,8 @@ bool read_merge(SQP sqp, size_t min_olap,
     unsigned short min_match[MAX_SEQ_LEN+1],
     unsigned short max_mismatch[MAX_SEQ_LEN+1],
     char adj_q_cut);
-inline bool next_fastqs( gzFile ffq, gzFile rfq, SQP curr_sqp, bool p64 );
-inline int write_fastq(gzFile out, char id[], char seq[], char qual[]);
+extern inline bool next_fastqs( gzFile ffq, gzFile rfq, SQP curr_sqp, bool p64 );
+extern inline int write_fastq(gzFile out, char id[], char seq[], char qual[]);
 inline bool f_r_id_check( char fid[], size_t fid_len, char rid[], size_t rid_len );
 int read_fastq( gzFile* fastq, char id[], char seq[], char qual[],
     size_t *id_len, size_t *seq_len, bool p64 );
@@ -104,7 +104,7 @@ bool k_match( const char* s1, const char* q1, size_t len1,
     unsigned short max_mismatch, char adj_q_cut);
 void revcom_seq( char seq[], int len);
 inline char revcom_char(const char base);
-inline void rev_qual( char q[], int len );
+extern inline void rev_qual( char q[], int len );
 bool adapter_trim(SQP sqp, size_t min_ol_adapter,
     char *forward_primer, char *forward_primer_dummy_qual,
     int forward_primer_len,
