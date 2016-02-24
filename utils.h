@@ -9,7 +9,7 @@
 
 #define MAX_ID_LEN (256)
 #define MAX_FN_LEN (512)
-#define MAX_SEQ_LEN (256)
+#define MAX_SEQ_LEN (1024)
 //60+33 = 93 = '[' (was 83='S')
 #define MAX_QUAL (93)
 extern char maximum_quality;
