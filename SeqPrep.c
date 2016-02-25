@@ -135,7 +135,8 @@ int main( int argc, char* argv[] ) {
   char reverse_discard_fn[MAX_FN_LEN];
   char merged_out_fn[MAX_FN_LEN];
   bool do_read_merging = false;
-  bool print_overhang = false;
+  /// Was not used anywhere, commenting out...
+  // bool print_overhang = false;
   bool write_discard=false;
   bool gather_stats=false;
   bool use_mask=false;
@@ -280,9 +281,10 @@ int main( int argc, char* argv[] ) {
     case 'y' :
       maximum_quality = optarg[0];
       break;
-    case 'g' :
-      print_overhang = true;
-      break;
+    // case 'g' :
+    //   // Doesn't seem to be used anywhere, removing...
+    //   print_overhang = true;
+    //   break;
     case 's' :
       do_read_merging = true;
       strcpy( merged_out_fn, optarg );
