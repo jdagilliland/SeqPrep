@@ -98,9 +98,9 @@ void write_stats(STAT stat){
  */
 inline char mismatch_p33_merge(char pA, char pB){
   if(pA > pB){
-    return min(pA-(pB-33),maximum_quality);
+    return max( min(pA-(pB-33),maximum_quality), MIN_QUAL);
   }else{
-    return min(pB-(pA-33),maximum_quality);
+    return max( min(pB-(pA-33),maximum_quality), MIN_QUAL);
   }
 }
 
@@ -126,12 +126,14 @@ bool isXDNA(char c){
  * Calculates the resulting phred 33 score given a match
  */
 inline char match_p33_merge(char pA, char pB){
+  pA = min(pA, maximum_quality);
+  pB = min(pB, maximum_quality);
   char res = pA+(pB-33);
-  return min(res,maximum_quality);
+  return max(min(res,maximum_quality), MIN_QUAL);
 }
 
 inline char gap_p33_qual(char q){
-  return min(((q-33)>>1)+33,maximum_quality);
+  return max(min(((q-33)>>1)+33,maximum_quality), MIN_QUAL);
 }
 
 
@@ -438,7 +440,8 @@ bool adapter_trim(SQP sqp, size_t min_ol_adapter,
     unsigned short max_mismatch_adapter[MAX_SEQ_LEN+1],
     unsigned short min_match_reads[MAX_SEQ_LEN+1],
     unsigned short max_mismatch_reads[MAX_SEQ_LEN+1],
-    char qcut){
+    char qcut, 
+    bool use_mask){
   //adapters on reads if the insert size is less than the read length, the adapter
   // appears at the end of the sequence.
 
@@ -485,15 +488,38 @@ bool adapter_trim(SQP sqp, size_t min_ol_adapter,
   if(fpos != CODE_NOMATCH || rpos != CODE_NOMATCH){
     //check if reads are long enough to do anything with.
     // trim adapters
+    int sz_sqp;
+    int iter;
     if(fpos >=0){
-      sqp->fseq[fpos] = '\0';
-      sqp->fqual[fpos] = '\0';
-      sqp->flen = fpos;
+      
+      if(use_mask){
+         sz_sqp = sizeof(sqp->fseq);
+         for(iter=sqp->flen; iter<sz_sqp && (sqp->fseq[iter] != '\0'); iter++){
+            sqp->fseq[iter]='N';
+         }
+         sqp->flen=iter;
+      }else{
+         sqp->fseq[fpos] = '\0';
+         sqp->fqual[fpos] = '\0';
+         sqp->flen = fpos;
+      }
+      
     }
     if(rpos >= 0){
-      sqp->rseq[rpos] = '\0';
-      sqp->rqual[rpos] = '\0';
-      sqp->rlen = rpos;
+       
+       if(use_mask){
+         sz_sqp = sizeof(sqp->rseq);
+         for(iter=sqp->rlen; iter<sz_sqp && (sqp->rseq[iter] != '\0'); iter++){
+            sqp->rseq[iter]='N';
+         }
+         sqp->rlen=iter;
+       }else{
+         sqp->rseq[rpos] = '\0';
+         sqp->rqual[rpos] = '\0';
+         sqp->rlen = rpos;
+       }
+       
+       
     }
     // now re-reverse complement the sequences
     strncpy(sqp->rc_rseq,sqp->rseq,sqp->rlen+1);
@@ -507,7 +533,7 @@ bool adapter_trim(SQP sqp, size_t min_ol_adapter,
   return read_olap_adapter_trim(sqp, min_ol_adapter,
       min_match_adapter, max_mismatch_adapter,
       min_match_reads, max_mismatch_reads,
-      qcut);
+      qcut, use_mask);
 }
 
 
@@ -521,7 +547,7 @@ bool read_olap_adapter_trim(SQP sqp, size_t min_ol_adapter,
     unsigned short max_mismatch_adapter[MAX_SEQ_LEN+1],
     unsigned short min_match_reads[MAX_SEQ_LEN+1],
     unsigned short max_mismatch_reads[MAX_SEQ_LEN+1],
-    char qcut){
+    char qcut, bool use_mask){
   ////////////
   // Look at the adapter overhang
   // Starting from our minimum adapter overlap
@@ -555,6 +581,8 @@ bool read_olap_adapter_trim(SQP sqp, size_t min_ol_adapter,
       //no adapter
       return false;
     }else{
+      int sz_sqp;
+      int iter;
       //ppos gives us the shift to the left of the query
       // One case:
       //   ----X------- fread
@@ -580,8 +608,21 @@ bool read_olap_adapter_trim(SQP sqp, size_t min_ol_adapter,
         //   ----         fread
         // -X----X---     rread
         // make initial cut to rc read
-        sqp->rc_rqual[ppos + sqp->flen] = '\0';
-        sqp->rc_rseq[ppos + sqp->flen] = '\0';
+        if(use_mask){
+           sz_sqp = sizeof(sqp->fseq);
+           for(iter= sqp->flen + ppos; iter<sz_sqp && (sqp->fseq[iter] != '\0'); iter++){
+              sqp->fseq[iter]='N';
+           }
+           sqp->flen=iter;
+           sz_sqp = sizeof(sqp->rseq);
+           for(iter=sqp->rlen + ppos; iter<sz_sqp && (sqp->rseq[iter] != '\0'); iter++){
+              sqp->rseq[iter]='N';
+           }
+           sqp->rlen=iter;
+        }else{
+          sqp->rc_rqual[ppos + sqp->flen] = '\0';
+          sqp->rc_rseq[ppos + sqp->flen] = '\0';
+	}
         strncpy(sqp->rseq,sqp->rc_rseq,ppos + sqp->flen+1); //move RC reads into reg place and reverse them
         strncpy(sqp->rqual,sqp->rc_rqual,ppos + sqp->flen+1);
         rev_qual(sqp->rqual, ppos + sqp->flen);
@@ -593,10 +634,23 @@ bool read_olap_adapter_trim(SQP sqp, size_t min_ol_adapter,
       }
 
       //now cases have been handled and length has been determined
-      sqp->fseq[sqp->flen] = '\0';
-      sqp->fqual[sqp->flen] = '\0';
-      sqp->rseq[sqp->rlen] = '\0';
-      sqp->rqual[sqp->rlen] = '\0';
+      if(use_mask){
+         sz_sqp = sizeof(sqp->fseq);
+         for(iter=sqp->flen; iter<sz_sqp && (sqp->fseq[iter] != '\0'); iter++){
+            sqp->fseq[iter]='N';
+         }
+         sqp->flen=iter;
+         sz_sqp = sizeof(sqp->rseq);
+         for(iter=sqp->rlen; iter<sz_sqp && (sqp->rseq[iter] != '\0'); iter++){
+            sqp->rseq[iter]='N';
+         }
+         sqp->rlen=iter;
+      }else{
+        sqp->fseq[sqp->flen] = '\0';
+        sqp->fqual[sqp->flen] = '\0';
+        sqp->rseq[sqp->rlen] = '\0';
+        sqp->rqual[sqp->rlen] = '\0';
+      }
       // now re-reverse complement the sequences
       strncpy(sqp->rc_rseq,sqp->rseq,sqp->rlen+1);
       strncpy(sqp->rc_rqual,sqp->rqual,sqp->rlen+1);
@@ -884,7 +938,7 @@ inline int write_fastq(gzFile out, char id[], char seq[], char qual[]){
 inline bool f_r_id_check( char fid[], size_t fid_len, char rid[], size_t rid_len ) {
   if(fid_len != rid_len){
     goto bad_read;
-  //}else if (strncmp( fid, rid, fid_len - 2) == 0 ) {
+    //}else if (strncmp( fid, rid, fid_len - 2) == 0 ) {
   }else{
     return true;
   }
@@ -898,7 +952,7 @@ inline bool f_r_id_check( char fid[], size_t fid_len, char rid[], size_t rid_len
    Return 1 => more sequence to be had
           0 => EOF
  */
-int read_fastq( gzFile* fastq, char id[], char seq[], char qual[], size_t *id_len, size_t *seq_len, bool p64 ) {
+int read_fastq( gzFile fastq, char id[], char seq[], char qual[], size_t *id_len, size_t *seq_len, bool p64 ) {
   char c;
   size_t i;
   c = gzgetc( fastq );
@@ -928,10 +982,10 @@ int read_fastq( gzFile* fastq, char id[], char seq[], char qual[], size_t *id_le
   *id_len = i;
   /* Now, everything else on the line is description (if anything)
      although fastq does not appear to formally support description */
-//  while ( (c != '\n') &&
-//      (c != EOF) ) {
-//    c = gzgetc( fastq );
-//  }
+  //  while ( (c != '\n') &&
+  //      (c != EOF) ) {
+  //    c = gzgetc( fastq );
+  //  }
 
   /* Now, read the sequence. This should all be on a single line */
   i = 0;
@@ -1009,13 +1063,13 @@ int read_fastq( gzFile* fastq, char id[], char seq[], char qual[], size_t *id_le
 
 
 /** fileOpen **/
-gzFile * fileOpen(const char *name, char access_mode[]) {
-  gzFile * f;
+gzFile fileOpen(const char *name, char access_mode[]) {
+  gzFile f;
   f = gzopen(name, access_mode);
-  if (f == NULL) {
+  if (f == Z_NULL) {
     fprintf( stderr, "%s\n", name);
     perror("Cannot open file");
-    return NULL;
+    return Z_NULL;
   }
   return f;
 }
@@ -1051,7 +1105,7 @@ int compute_ol(
      on the forward sequence */
   int best_hit = CODE_NOMATCH;
   int subject_len = subjectLen;
-  for( pos = 0; pos < subjectLen - min_olap; pos++ ) {
+  for( pos = 0; pos < subjectLen - min_olap + 1; pos++ ) {
     subject_len = subjectLen - pos;
     //Round1:
     //   ------     Subj

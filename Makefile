@@ -1,5 +1,4 @@
-CC=gcc
-CFLAGS=-c -Wall -O2
+CFLAGS=-c -Wall -O0 -g
 #recommended options: -ffast-math -ftree-vectorize -march=core2 -mssse3 -O3
 COPTS=
 LDFLAGS=-lz -lm
@@ -9,8 +8,8 @@ EXECUTABLE=SeqPrep
 
 all: $(SOURCES) $(EXECUTABLE)
 
-$(EXECUTABLE): $(OBJECTS) 
-	$(CC) ${COPTS} $(LDFLAGS) $(OBJECTS) -o $@
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) ${COPTS} $(OBJECTS) $(LDFLAGS) -o $@
 
 install: all
 	-cp $(EXECUTABLE) $(HOME)/bin
@@ -19,7 +18,7 @@ install: all
 	$(CC) ${COPTS} $(CFLAGS) $< -o $@
 
 clean:
-	-rm $(OBJECTS) $(EXECUTABLE)
+	-rm -f $(OBJECTS) $(EXECUTABLE)
 
 check-syntax:
 	$(CC) ${CFLAGS} -o .nul -S ${CHK_SOURCES}
