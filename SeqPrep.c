@@ -45,7 +45,7 @@ void help ( char *prog_name ) {
   fprintf(stderr, "General Arguments (Optional):\n" );
   fprintf(stderr, "\t-3 <first read discarded fastq filename>\n" );
   fprintf(stderr, "\t-4 <second read discarded fastq filename>\n" );
-  fprintf(stderr, "\t-S Write detailed statistics to stdout (assumes that the -s option is not used)\n" );
+  fprintf(stderr, "\t-T Write detailed statistics to stdout (assumes that the -s option is not used)\n" );
   fprintf(stderr, "\t-h Display this help message and exit (also works with no args) \n" );
   fprintf(stderr, "\t-6 Input sequence is in phred+64 rather than phred+33 format, the output will still be phred+33 \n" );
   fprintf(stderr, "\t-q <Quality score cutoff for mismatches to be counted in overlap; default = %d>\n", DEF_QCUT );
@@ -179,7 +179,7 @@ int main( int argc, char* argv[] ) {
     help(argv[0]);
   }
   int req_args = 0;
-  while( (ich=getopt( argc, argv, "f:r:1:2:3:4:q:A:s:y:B:O:E:x:M:N:L:o:m:b:w:W:p:P:X:Q:t:e:Z:n:6ghzS" )) != -1 ) {
+  while( (ich=getopt( argc, argv, "f:r:1:2:3:4:q:A:s:y:B:O:E:x:M:N:L:o:m:b:w:W:p:P:X:Q:t:e:Z:n:6ghzT" )) != -1 ) {
     switch( ich ) {
 
     //REQUIRED ARGUMENTS
@@ -209,7 +209,7 @@ int main( int argc, char* argv[] ) {
       write_discard=true;
       strcpy(reverse_discard_fn, optarg);
       break;
-    case 'S' :
+    case 'T' :
       gather_stats=true;
       break;
     case 'h' :

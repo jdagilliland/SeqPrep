@@ -34,6 +34,7 @@ General Arguments (Optional):
 	-6 Input sequence is in phred+64 rather than phred+33 format, the output will still be phred+33 
 	-q <Quality score cutoff for mismatches to be counted in overlap; default = 13>
 	-L <Minimum length of a trimmed or merged read to print it; default = 30>
+	-T Write detailed statistics to stdout (assumes that the -s option is not used)
 
 Arguments for Adapter/Primer Trimming (Optional):
 
